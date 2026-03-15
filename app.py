@@ -8,6 +8,7 @@ from wtforms import StringField, PasswordField, SubmitField
 from wtforms.validators import DataRequired, Email, Length, EqualTo
 from datetime import datetime
 from dotenv import load_dotenv
+from functools import wraps
 
 # Load environment variables
 load_dotenv()
@@ -43,6 +44,19 @@ class User(UserMixin, db.Model):
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
+
+# Admin required decorator
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated:
+            flash('Please sign in to access this page.', 'warning')
+            return redirect(url_for('signin'))
+        if current_user.role != 'admin':
+            flash('You need admin privileges to access this page.', 'danger')
+            return redirect(url_for('dashboard'))
+        return f(*args, **kwargs)
+    return decorated_function
 
 # Forms
 class SignInForm(FlaskForm):
@@ -117,6 +131,14 @@ def signup():
 @login_required
 def dashboard():
     return render_template('dashboard.html', user=current_user)
+
+@app.route('/admin')
+@login_required
+@admin_required
+def admin_panel():
+    users = User.query.all()
+    now = datetime.utcnow()
+    return render_template('admin.html', users=users, now=now)
 
 @app.route('/logout')
 @login_required
